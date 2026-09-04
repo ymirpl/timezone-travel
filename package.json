@@ -1,0 +1,99 @@
+{
+  "$schema": "https://www.raycast.com/schemas/extension.json",
+  "name": "time-travel-world-clock",
+  "title": "Time Travel World Clock",
+  "description": "Move through time and compare the same moment across cities.",
+  "icon": "icon.png",
+  "author": "marcinmincer",
+  "platforms": [
+    "macOS",
+    "Windows"
+  ],
+  "categories": [
+    "Productivity"
+  ],
+  "license": "MIT",
+  "commands": [
+    {
+      "name": "time-travel",
+      "title": "Time Travel",
+      "subtitle": "Compare Cities",
+      "description": "Move one moment across all configured cities",
+      "mode": "view"
+    }
+  ],
+  "preferences": [
+    {
+      "name": "cities",
+      "title": "Cities",
+      "description": "Comma-separated Label|IANA timezone pairs",
+      "type": "textfield",
+      "required": true,
+      "default": "Warsaw|Europe/Warsaw, New York|America/New_York, Austin|America/Chicago, San Francisco|America/Los_Angeles",
+      "placeholder": "Warsaw|Europe/Warsaw, New York|America/New_York"
+    },
+    {
+      "name": "clockFormat",
+      "title": "Clock Format",
+      "description": "Choose how local times are displayed",
+      "type": "dropdown",
+      "required": true,
+      "default": "12",
+      "data": [
+        {
+          "title": "12-hour",
+          "value": "12"
+        },
+        {
+          "title": "24-hour",
+          "value": "24"
+        }
+      ]
+    },
+    {
+      "name": "stepMinutes",
+      "title": "Movement Step",
+      "description": "Amount moved by the primary forward and backward actions",
+      "type": "dropdown",
+      "required": true,
+      "default": "15",
+      "data": [
+        {
+          "title": "15 minutes",
+          "value": "15"
+        },
+        {
+          "title": "30 minutes",
+          "value": "30"
+        },
+        {
+          "title": "60 minutes",
+          "value": "60"
+        }
+      ]
+    }
+  ],
+  "dependencies": {
+    "@raycast/api": "^2.1.2",
+    "react": "^19.0.0"
+  },
+  "devDependencies": {
+    "@raycast/eslint-config": "^2.2.0",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.0.0",
+    "eslint": "^9.0.0",
+    "prettier": "^3.0.0",
+    "typescript": "^5.8.0",
+    "vitest": "^4.1.11"
+  },
+  "scripts": {
+    "dev": "ray develop",
+    "build": "ray build -e dist",
+    "lint": "ray lint",
+    "fix-lint": "ray lint --fix",
+    "format": "prettier --write .",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "publish": "npx @raycast/api@latest publish"
+  }
+}
