@@ -20,18 +20,16 @@
       "subtitle": "Compare Cities",
       "description": "Move one moment across all configured cities",
       "mode": "view"
+    },
+    {
+      "name": "manage-cities",
+      "title": "Manage Cities",
+      "subtitle": "Time Travel",
+      "description": "Add, remove, or choose the anchor city",
+      "mode": "view"
     }
   ],
   "preferences": [
-    {
-      "name": "cities",
-      "title": "Cities",
-      "description": "Comma-separated Label|IANA timezone pairs",
-      "type": "textfield",
-      "required": true,
-      "default": "Warsaw|Europe/Warsaw, New York|America/New_York, Austin|America/Chicago, San Francisco|America/Los_Angeles",
-      "placeholder": "Warsaw|Europe/Warsaw, New York|America/New_York"
-    },
     {
       "name": "clockFormat",
       "title": "Clock Format",
@@ -47,28 +45,6 @@
         {
           "title": "24-hour",
           "value": "24"
-        }
-      ]
-    },
-    {
-      "name": "stepMinutes",
-      "title": "Movement Step",
-      "description": "Amount moved by the primary forward and backward actions",
-      "type": "dropdown",
-      "required": true,
-      "default": "15",
-      "data": [
-        {
-          "title": "15 minutes",
-          "value": "15"
-        },
-        {
-          "title": "30 minutes",
-          "value": "30"
-        },
-        {
-          "title": "60 minutes",
-          "value": "60"
         }
       ]
     }

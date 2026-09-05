@@ -6,60 +6,49 @@ import {
   Icon,
   Keyboard,
   List,
-  openExtensionPreferences,
+  showToast,
+  Toast,
 } from "@raycast/api";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { DEFAULT_CITIES } from "./cities";
+import type { City } from "./cities";
+import { loadCities } from "./city-storage";
+import { ManageCities } from "./manage-cities";
 import {
   describeDayOffset,
   formatDateInZone,
   formatTimeInZone,
   formatTimeZoneName,
   getCitySnapshot,
-  parseCities,
   parseTimeQuery,
   shiftInstant,
 } from "./time";
 
 type QueryState = "idle" | "valid" | "invalid";
 
-function formatStep(minutes: number): string {
-  if (minutes === 60) return "1 Hour";
-  return `${minutes} Minutes`;
+function formatReadingSummary(reading: { city: City; time: string; date: string }): string {
+  return `${reading.city.label}: ${reading.time}, ${reading.date}`;
 }
 
 function TimeTravelActions(props: {
-  stepMinutes: number;
   clipboardSummary: string;
+  selectedSummary: string;
+  cityLabel: string;
   onMove: (minutes: number) => void;
-  onPick: (date: Date) => void;
   onNow: () => void;
+  onCitiesChange: (cities: City[]) => void;
 }) {
-  const { stepMinutes, clipboardSummary, onMove, onPick, onNow } = props;
+  const { clipboardSummary, selectedSummary, cityLabel, onMove, onNow, onCitiesChange } = props;
 
   return (
     <ActionPanel>
+      <ActionPanel.Section>
+        <Action.CopyToClipboard title={`Copy ${cityLabel} Time`} content={selectedSummary} />
+      </ActionPanel.Section>
       <ActionPanel.Section title="Move Through Time">
         <Action
-          title={`Move Forward ${formatStep(stepMinutes)}`}
-          icon={Icon.ArrowRight}
-          shortcut={{
-            macOS: { modifiers: ["cmd"], key: "arrowRight" },
-            Windows: { modifiers: ["ctrl"], key: "arrowRight" },
-          }}
-          onAction={() => onMove(stepMinutes)}
-        />
-        <Action
-          title={`Move Back ${formatStep(stepMinutes)}`}
-          icon={Icon.ArrowLeft}
-          shortcut={{
-            macOS: { modifiers: ["cmd"], key: "arrowLeft" },
-            Windows: { modifiers: ["ctrl"], key: "arrowLeft" },
-          }}
-          onAction={() => onMove(-stepMinutes)}
-        />
-        <Action
           title="Move Forward 1 Hour"
-          icon={Icon.ArrowRightCircle}
+          icon={Icon.ArrowRight}
           shortcut={{
             macOS: { modifiers: ["opt"], key: "arrowRight" },
             Windows: { modifiers: ["alt"], key: "arrowRight" },
@@ -68,43 +57,20 @@ function TimeTravelActions(props: {
         />
         <Action
           title="Move Back 1 Hour"
-          icon={Icon.ArrowLeftCircle}
+          icon={Icon.ArrowLeft}
           shortcut={{
             macOS: { modifiers: ["opt"], key: "arrowLeft" },
             Windows: { modifiers: ["alt"], key: "arrowLeft" },
           }}
           onAction={() => onMove(-60)}
         />
-        <Action
-          title="Move Forward 1 Day"
-          icon={Icon.Calendar}
-          shortcut={{
-            macOS: { modifiers: ["cmd", "shift"], key: "arrowRight" },
-            Windows: { modifiers: ["ctrl", "shift"], key: "arrowRight" },
-          }}
-          onAction={() => onMove(1_440)}
-        />
-        <Action
-          title="Move Back 1 Day"
-          icon={Icon.Calendar}
-          shortcut={{
-            macOS: { modifiers: ["cmd", "shift"], key: "arrowLeft" },
-            Windows: { modifiers: ["ctrl", "shift"], key: "arrowLeft" },
-          }}
-          onAction={() => onMove(-1_440)}
-        />
       </ActionPanel.Section>
-      <ActionPanel.Section title="Jump">
+      <ActionPanel.Section>
         <Action
           title="Return to Now"
           icon={Icon.RotateClockwise}
           shortcut={Keyboard.Shortcut.Common.Refresh}
           onAction={onNow}
-        />
-        <Action.PickDate
-          title="Pick Exact Moment"
-          type={Action.PickDate.Type.DateTime}
-          onChange={(date) => date && onPick(date)}
         />
       </ActionPanel.Section>
       <ActionPanel.Section>
@@ -113,7 +79,11 @@ function TimeTravelActions(props: {
           content={clipboardSummary}
           shortcut={Keyboard.Shortcut.Common.Copy}
         />
-        <Action title="Manage Cities" icon={Icon.Gear} onAction={openExtensionPreferences} />
+        <Action.Push
+          title="Manage Cities"
+          icon={Icon.Gear}
+          target={<ManageCities onChange={onCitiesChange} />}
+        />
       </ActionPanel.Section>
     </ActionPanel>
   );
@@ -121,8 +91,8 @@ function TimeTravelActions(props: {
 
 export default function Command() {
   const preferences = getPreferenceValues<Preferences.TimeTravel>();
-  const cities = useMemo(() => parseCities(preferences.cities), [preferences.cities]);
-  const stepMinutes = Number(preferences.stepMinutes) || 15;
+  const [cities, setCities] = useState<City[]>(DEFAULT_CITIES);
+  const [isLoadingCities, setIsLoadingCities] = useState(true);
   const use24Hour = preferences.clockFormat === "24";
   const anchorCity = cities[0];
 
@@ -142,10 +112,22 @@ export default function Command() {
       })),
     [cities, moment, use24Hour],
   );
-  const clipboardSummary = useMemo(
-    () => readings.map((reading) => `${reading.city.label}: ${reading.time}, ${reading.date}`).join("\n"),
-    [readings],
-  );
+  const clipboardSummary = useMemo(() => readings.map(formatReadingSummary).join("\n"), [readings]);
+
+  useEffect(() => {
+    let isActive = true;
+    loadCities()
+      .then((storedCities) => {
+        if (isActive) setCities(storedCities);
+      })
+      .catch(() => showToast(Toast.Style.Failure, "Could not load your saved cities"))
+      .finally(() => {
+        if (isActive) setIsLoadingCities(false);
+      });
+    return () => {
+      isActive = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!isLive) return;
@@ -153,29 +135,34 @@ export default function Command() {
     return () => clearInterval(timer);
   }, [isLive]);
 
-  const move = useCallback((minutes: number) => {
+  const resetTimeQuery = useCallback(() => {
     queryBase.current = null;
-    setMoment((current) => shiftInstant(current, minutes));
     setQuery("");
     setQueryState("idle");
-    setIsLive(false);
   }, []);
+
+  const move = useCallback(
+    (minutes: number) => {
+      resetTimeQuery();
+      setMoment((current) => shiftInstant(current, minutes));
+      setIsLive(false);
+    },
+    [resetTimeQuery],
+  );
 
   const returnToNow = useCallback(() => {
-    queryBase.current = null;
+    resetTimeQuery();
     setMoment(new Date());
-    setQuery("");
-    setQueryState("idle");
     setIsLive(true);
-  }, []);
+  }, [resetTimeQuery]);
 
-  const pickMoment = useCallback((date: Date) => {
-    queryBase.current = null;
-    setMoment(date);
-    setQuery("");
-    setQueryState("idle");
-    setIsLive(false);
-  }, []);
+  const updateCities = useCallback(
+    (nextCities: City[]) => {
+      resetTimeQuery();
+      setCities(nextCities);
+    },
+    [resetTimeQuery],
+  );
 
   const changeQuery = useCallback(
     (text: string) => {
@@ -205,16 +192,24 @@ export default function Command() {
     [anchorCity, moment],
   );
 
+  if (isLoadingCities) {
+    return <List isLoading navigationTitle="Time Travel" searchBarPlaceholder="Loading cities…" />;
+  }
+
   if (!anchorCity) {
     return (
       <List searchBarPlaceholder="Configure at least one city to begin">
         <List.EmptyView
-          title="No Valid Cities"
-          description="Add Label|IANA timezone pairs in extension preferences."
+          title="Choose Your First City"
+          description="Search for a city to start comparing local times."
           icon={Icon.Globe}
           actions={
             <ActionPanel>
-              <Action title="Manage Cities" icon={Icon.Gear} onAction={openExtensionPreferences} />
+              <Action.Push
+                title="Manage Cities"
+                icon={Icon.Gear}
+                target={<ManageCities onChange={updateCities} />}
+              />
             </ActionPanel>
           }
         />
@@ -222,15 +217,11 @@ export default function Command() {
     );
   }
 
-  const anchorReading = `${formatDateInZone(moment, anchorCity.timeZone)} at ${formatTimeInZone(
-    moment,
-    anchorCity.timeZone,
-    use24Hour,
-  )}`;
+  const anchorReading = `${readings[0].date} at ${readings[0].time}`;
   const sectionSubtitle =
     queryState === "invalid"
       ? "Keep typing: 14:30, tomorrow 9am, +3h, or -30m"
-      : `${anchorReading} in ${anchorCity.label}`;
+      : `${anchorCity.label} · ${anchorReading}`;
 
   return (
     <List
@@ -238,12 +229,13 @@ export default function Command() {
       navigationTitle="Time Travel"
       searchText={query}
       onSearchTextChange={changeQuery}
-      searchBarPlaceholder={`Set time in ${anchorCity.label}: 14:30, tomorrow 9am, +3h`}
+      searchBarPlaceholder={`Set time in ${anchorCity.label} — 14:30, tomorrow 9am, +3h`}
     >
       <List.Section title={isLive ? "NOW" : "TIME TRAVEL"} subtitle={sectionSubtitle}>
         {readings.map((reading, index) => {
           const { city } = reading;
-          const dayDifference = describeDayOffset(reading.daySerial - readings[0].daySerial);
+          const dayOffset = reading.daySerial - readings[0].daySerial;
+          const dayDifference = describeDayOffset(dayOffset);
 
           return (
             <List.Item
@@ -253,11 +245,10 @@ export default function Command() {
                 tintColor: reading.isWorkingHour ? Color.Green : Color.SecondaryText,
               }}
               title={{ value: city.label, tooltip: reading.timeZoneName }}
-              subtitle={`00  ${reading.timeline}  24`}
               keywords={[city.timeZone, reading.timeZoneName]}
               accessories={[
                 ...(index === 0 ? [{ tag: { value: "Anchor", color: Color.Blue } }] : []),
-                ...(dayDifference === "Same day" ? [] : [{ tag: dayDifference }]),
+                ...(dayOffset === 0 ? [] : [{ tag: dayDifference }]),
                 {
                   tag: {
                     value: reading.isWorkingHour ? "Working hours" : "Outside work",
@@ -265,17 +256,19 @@ export default function Command() {
                   },
                 },
                 {
-                  text: reading.time,
-                  tooltip: reading.date,
+                  text: { value: reading.time, color: Color.PrimaryText },
+                  tooltip: dayOffset === 0 ? reading.date : `${reading.date} · ${dayDifference}`,
                 },
+                { text: `00  ${reading.timeline}  24` },
               ]}
               actions={
                 <TimeTravelActions
-                  stepMinutes={stepMinutes}
                   clipboardSummary={clipboardSummary}
+                  selectedSummary={formatReadingSummary(reading)}
+                  cityLabel={city.label}
                   onMove={move}
-                  onPick={pickMoment}
                   onNow={returnToNow}
+                  onCitiesChange={updateCities}
                 />
               }
             />

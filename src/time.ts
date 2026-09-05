@@ -1,8 +1,3 @@
-export interface City {
-  label: string;
-  timeZone: string;
-}
-
 interface ZonedParts {
   year: number;
   month: number;
@@ -243,33 +238,4 @@ export function getCitySnapshot(date: Date, timeZone: string): CitySnapshot {
     isWorkingHour: hour >= 9 && hour < 17,
     timeline: buildTimelineFromHour(hour),
   };
-}
-
-function isValidTimeZone(timeZone: string): boolean {
-  try {
-    new Intl.DateTimeFormat("en-US", { timeZone }).format();
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-export function parseCities(value: string): City[] {
-  const seen = new Set<string>();
-
-  return value
-    .split(/[,\n]/)
-    .map((entry) => entry.trim())
-    .filter(Boolean)
-    .flatMap((entry) => {
-      const separator = entry.indexOf("|");
-      if (separator < 1) return [];
-
-      const label = entry.slice(0, separator).trim();
-      const timeZone = entry.slice(separator + 1).trim();
-      if (!label || !isValidTimeZone(timeZone) || seen.has(timeZone)) return [];
-
-      seen.add(timeZone);
-      return [{ label, timeZone }];
-    });
 }

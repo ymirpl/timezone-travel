@@ -4,7 +4,6 @@ import {
   describeDayDifference,
   formatTimeInZone,
   getCitySnapshot,
-  parseCities,
   parseTimeQuery,
   shiftInstant,
 } from "./time";
@@ -84,14 +83,5 @@ describe("timezone presentation", () => {
       isWorkingHour: true,
       timeline: "···········●············",
     });
-  });
-});
-
-describe("parseCities", () => {
-  it("parses valid settings and ignores malformed timezones", () => {
-    expect(parseCities("Warsaw|Europe/Warsaw, Invalid|Mars/Olympus, New York|America/New_York")).toEqual([
-      { label: "Warsaw", timeZone: "Europe/Warsaw" },
-      { label: "New York", timeZone: "America/New_York" },
-    ]);
   });
 });

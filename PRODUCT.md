@@ -23,8 +23,8 @@ No skeuomorphic clock faces, physical-material simulation, decorative dashboards
 ## Design Principles
 
 1. One moment, many local readings.
-2. Make movement and direct search equally immediate.
-3. Keep configuration out of the comparison flow.
+2. Make one-hour movement and direct search equally immediate.
+3. Keep city management out of the comparison flow, but make it searchable and syntax-free.
 4. Show date boundaries and working hours without adding visual noise.
 5. Prefer familiar Raycast behavior over custom-looking controls.
 
