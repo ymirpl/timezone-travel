@@ -54,7 +54,7 @@ describe("timezone presentation", () => {
   const instant = new Date("2026-09-04T15:38:00.000Z");
 
   it("formats the same instant in each local timezone", () => {
-    expect(formatTimeInZone(instant, "Europe/Warsaw", false)).toBe("5:38 PM");
+    expect(formatTimeInZone(instant, "Europe/Warsaw", false)).toBe("05:38 PM");
     expect(formatTimeInZone(instant, "America/New_York", false)).toBe("11:38 AM");
     expect(formatTimeInZone(instant, "America/Los_Angeles", true)).toBe("08:38");
   });

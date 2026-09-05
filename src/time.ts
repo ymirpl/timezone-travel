@@ -171,7 +171,7 @@ export function parseTimeQuery(query: string, base: Date, anchorTimeZone: string
 export function formatTimeInZone(date: Date, timeZone: string, use24Hour: boolean): string {
   return getDisplayFormatter(`time:${timeZone}:${use24Hour ? "24" : "12"}`, use24Hour ? "en-GB" : "en-US", {
     timeZone,
-    hour: use24Hour ? "2-digit" : "numeric",
+    hour: "2-digit",
     minute: "2-digit",
     hour12: !use24Hour,
   }).format(date);

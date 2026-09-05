@@ -193,7 +193,15 @@ export default function Command() {
   );
 
   if (isLoadingCities) {
-    return <List isLoading navigationTitle="Time Travel" searchBarPlaceholder="Loading cities…" />;
+    return (
+      <List
+        isLoading
+        navigationTitle="Time Travel"
+        searchText=""
+        onSearchTextChange={() => undefined}
+        searchBarPlaceholder="Loading cities…"
+      />
+    );
   }
 
   if (!anchorCity) {
