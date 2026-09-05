@@ -5,6 +5,7 @@ import {
   formatTimeInZone,
   getCitySnapshot,
   parseTimeQuery,
+  parseTimeQueryResult,
   shiftInstant,
 } from "./time";
 
@@ -30,6 +31,21 @@ describe("parseTimeQuery", () => {
     expect(parseTimeQuery("-30m", base, "Europe/Warsaw")?.toISOString()).toBe("2026-09-04T15:08:00.000Z");
   });
 
+  it.each([
+    ["+1minute", "2026-09-04T15:39:00.000Z"],
+    ["+2hrs", "2026-09-04T17:38:00.000Z"],
+    ["-1day", "2026-09-03T15:38:00.000Z"],
+  ])("keeps relative-unit aliases in sync for %s", (query, expected) => {
+    expect(parseTimeQuery(query, base, "Europe/Warsaw")?.toISOString()).toBe(expected);
+  });
+
+  it.each(["+3", "+3 ho", "-30 mi"])("recognizes an unfinished relative query: %s", (query) => {
+    expect(parseTimeQueryResult(query, base, "Europe/Warsaw")).toEqual({
+      status: "invalid",
+      reason: "incomplete",
+    });
+  });
+
   it("rejects relative movement outside the Date range", () => {
     expect(parseTimeQuery("+1000000000d", base, "Europe/Warsaw")).toBeUndefined();
   });
@@ -47,6 +63,27 @@ describe("parseTimeQuery", () => {
   it("rejects a local time repeated by daylight saving time", () => {
     const beforeFallBack = new Date("2026-10-24T22:00:00.000Z");
     expect(parseTimeQuery("02:30", beforeFallBack, "Europe/Warsaw")).toBeUndefined();
+  });
+
+  it("distinguishes incomplete, invalid, out-of-range, and unavailable input", () => {
+    expect(parseTimeQueryResult("tomorrow", base, "Europe/Warsaw")).toEqual({
+      status: "invalid",
+      reason: "incomplete",
+    });
+    expect(parseTimeQueryResult("lunchtime", base, "Europe/Warsaw")).toEqual({
+      status: "invalid",
+      reason: "unrecognized",
+    });
+    expect(parseTimeQueryResult("25:00", base, "Europe/Warsaw")).toEqual({
+      status: "invalid",
+      reason: "out-of-range",
+    });
+
+    const beforeSpringForward = new Date("2026-03-28T23:00:00.000Z");
+    expect(parseTimeQueryResult("02:30", beforeSpringForward, "Europe/Warsaw")).toEqual({
+      status: "invalid",
+      reason: "unavailable",
+    });
   });
 });
 
@@ -83,5 +120,11 @@ describe("timezone presentation", () => {
       isWorkingHour: true,
       timeline: "···········●············",
     });
+  });
+
+  it("uses the same working-hours boundaries in every snapshot", () => {
+    expect(getCitySnapshot(new Date("2026-09-04T07:00:00.000Z"), "Europe/Warsaw").isWorkingHour).toBe(true);
+    expect(getCitySnapshot(new Date("2026-09-04T14:59:00.000Z"), "Europe/Warsaw").isWorkingHour).toBe(true);
+    expect(getCitySnapshot(new Date("2026-09-04T15:00:00.000Z"), "Europe/Warsaw").isWorkingHour).toBe(false);
   });
 });

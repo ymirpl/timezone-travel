@@ -14,6 +14,27 @@ export interface CitySnapshot {
   timeline: string;
 }
 
+export type TimeQueryIssue = "incomplete" | "unrecognized" | "out-of-range" | "unavailable";
+
+export type TimeQueryResult = { status: "valid"; date: Date } | { status: "invalid"; reason: TimeQueryIssue };
+
+const RELATIVE_UNITS = [
+  "minutes",
+  "minute",
+  "mins",
+  "min",
+  "m",
+  "hours",
+  "hour",
+  "hrs",
+  "hr",
+  "h",
+  "days",
+  "day",
+  "d",
+] as const;
+const RELATIVE_QUERY_PATTERN = new RegExp(`^([+-])\\s*(\\d+(?:\\.\\d+)?)\\s*(${RELATIVE_UNITS.join("|")})$`);
+
 const timeFormatters = new Map<string, Intl.DateTimeFormat>();
 const displayFormatters = new Map<string, Intl.DateTimeFormat>();
 
@@ -118,44 +139,68 @@ export function shiftInstant(date: Date, minutes: number): Date {
   return new Date(date.getTime() + minutes * 60_000);
 }
 
-export function parseTimeQuery(query: string, base: Date, anchorTimeZone: string): Date | undefined {
-  const normalized = query.trim().toLowerCase().replace(/\s+/g, " ");
-  if (!normalized) return undefined;
-  if (normalized === "now") return new Date();
+function looksLikeIncompleteQuery(query: string): boolean {
+  if (["today", "tomorrow", "yesterday"].some((word) => word.startsWith(query))) return true;
 
-  const relative = normalized.match(
-    /^([+-])\s*(\d+(?:\.\d+)?)\s*(m|min|mins|minute|minutes|h|hr|hrs|hour|hours|d|day|days)$/,
-  );
+  const relativePrefix = query.match(/^([+-])\s*(\d*(?:\.\d*)?)\s*([a-z]*)$/);
+  if (relativePrefix) {
+    const amount = relativePrefix[2];
+    const unit = relativePrefix[3];
+    return (
+      !amount ||
+      amount.endsWith(".") ||
+      !unit ||
+      RELATIVE_UNITS.some((candidate) => candidate.startsWith(unit))
+    );
+  }
+
+  const clock = query.replace(/^(today|tomorrow|yesterday)\s+/, "");
+  return /^\d{1,2}:\d?$/.test(clock) || /^\d{1,2}(?::\d{2})?\s*[ap]$/.test(clock);
+}
+
+export function parseTimeQueryResult(query: string, base: Date, anchorTimeZone: string): TimeQueryResult {
+  const normalized = query.trim().toLowerCase().replace(/\s+/g, " ");
+  if (!normalized) return { status: "invalid", reason: "incomplete" };
+  if (normalized === "now") return { status: "valid", date: new Date() };
+
+  const relative = normalized.match(RELATIVE_QUERY_PATTERN);
   if (relative) {
     const direction = relative[1] === "+" ? 1 : -1;
     const amount = Number(relative[2]);
     const unit = relative[3][0];
     const multiplier = unit === "d" ? 1_440 : unit === "h" ? 60 : 1;
     const shifted = shiftInstant(base, direction * amount * multiplier);
-    return Number.isFinite(shifted.getTime()) ? shifted : undefined;
+    return Number.isFinite(shifted.getTime())
+      ? { status: "valid", date: shifted }
+      : { status: "invalid", reason: "out-of-range" };
   }
 
   const clock = normalized.match(/^(?:(today|tomorrow|yesterday)\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/);
-  if (!clock) return undefined;
+  if (!clock) {
+    return {
+      status: "invalid",
+      reason: looksLikeIncompleteQuery(normalized) ? "incomplete" : "unrecognized",
+    };
+  }
 
   const dayWord = clock[1];
   let hour = Number(clock[2]);
   const minute = Number(clock[3] ?? 0);
   const meridiem = clock[4];
 
-  if (minute > 59) return undefined;
+  if (minute > 59) return { status: "invalid", reason: "out-of-range" };
   if (meridiem) {
-    if (hour < 1 || hour > 12) return undefined;
+    if (hour < 1 || hour > 12) return { status: "invalid", reason: "out-of-range" };
     hour = (hour % 12) + (meridiem === "pm" ? 12 : 0);
   } else if (hour > 23) {
-    return undefined;
+    return { status: "invalid", reason: "out-of-range" };
   }
 
   const baseParts = getZonedParts(base, anchorTimeZone);
   const dayOffset = dayWord === "tomorrow" ? 1 : dayWord === "yesterday" ? -1 : 0;
   const shiftedDay = new Date(Date.UTC(baseParts.year, baseParts.month - 1, baseParts.day + dayOffset));
 
-  return zonedWallClockToInstant(
+  const date = zonedWallClockToInstant(
     {
       year: shiftedDay.getUTCFullYear(),
       month: shiftedDay.getUTCMonth() + 1,
@@ -166,6 +211,13 @@ export function parseTimeQuery(query: string, base: Date, anchorTimeZone: string
     },
     anchorTimeZone,
   );
+
+  return date ? { status: "valid", date } : { status: "invalid", reason: "unavailable" };
+}
+
+export function parseTimeQuery(query: string, base: Date, anchorTimeZone: string): Date | undefined {
+  const result = parseTimeQueryResult(query, base, anchorTimeZone);
+  return result.status === "valid" ? result.date : undefined;
 }
 
 export function formatTimeInZone(date: Date, timeZone: string, use24Hour: boolean): string {
@@ -215,9 +267,12 @@ export function localHour(date: Date, timeZone: string): number {
   return parts.hour + parts.minute / 60;
 }
 
-export function isWorkingHour(date: Date, timeZone: string): boolean {
-  const hour = localHour(date, timeZone);
+function isWorkingHourValue(hour: number): boolean {
   return hour >= 9 && hour < 17;
+}
+
+export function isWorkingHour(date: Date, timeZone: string): boolean {
+  return isWorkingHourValue(localHour(date, timeZone));
 }
 
 export function buildTimeline(date: Date, timeZone: string): string {
@@ -235,7 +290,7 @@ export function getCitySnapshot(date: Date, timeZone: string): CitySnapshot {
   return {
     daySerial: Date.UTC(parts.year, parts.month - 1, parts.day) / 86_400_000,
     hour,
-    isWorkingHour: hour >= 9 && hour < 17,
+    isWorkingHour: isWorkingHourValue(hour),
     timeline: buildTimelineFromHour(hour),
   };
 }

@@ -20,14 +20,28 @@ import {
   formatTimeInZone,
   formatTimeZoneName,
   getCitySnapshot,
-  parseTimeQuery,
+  parseTimeQueryResult,
   shiftInstant,
 } from "./time";
+import type { TimeQueryIssue } from "./time";
 
-type QueryState = "idle" | "valid" | "invalid";
+type QueryState = "idle" | "valid" | TimeQueryIssue;
 
 function formatReadingSummary(reading: { city: City; time: string; date: string }): string {
   return `${reading.city.label}: ${reading.time}, ${reading.date}`;
+}
+
+function describeQueryIssue(issue: TimeQueryIssue, query: string, anchorCity: City): string {
+  switch (issue) {
+    case "incomplete":
+      return "Keep typing — try 14:30, tomorrow 9am, or +3h";
+    case "out-of-range":
+      return "That time is outside the clock — use 00:00–23:59 or 1–12 am/pm";
+    case "unavailable":
+      return `“${query.trim()}” isn't a unique time in ${anchorCity.label} on this date — try another hour`;
+    case "unrecognized":
+      return `Couldn't read “${query.trim()}” — try 14:30, tomorrow 9am, or +3h`;
+  }
 }
 
 function TimeTravelActions(props: {
@@ -95,6 +109,7 @@ export default function Command() {
   const [isLoadingCities, setIsLoadingCities] = useState(true);
   const use24Hour = preferences.clockFormat === "24";
   const anchorCity = cities[0];
+  const moveShortcutHint = process.platform === "darwin" ? "⌥←/→" : "Alt ←/→";
 
   const [moment, setMoment] = useState(() => new Date());
   const [query, setQuery] = useState("");
@@ -173,19 +188,19 @@ export default function Command() {
         return;
       }
       if (!anchorCity) {
-        setQueryState("invalid");
+        setQueryState("unrecognized");
         return;
       }
 
       const base = queryBase.current ?? moment;
       queryBase.current = base;
-      const parsed = parseTimeQuery(text, base, anchorCity.timeZone);
-      if (!parsed) {
-        setQueryState("invalid");
+      const result = parseTimeQueryResult(text, base, anchorCity.timeZone);
+      if (result.status === "invalid") {
+        setQueryState(result.reason);
         return;
       }
 
-      setMoment(parsed);
+      setMoment(result.date);
       setQueryState("valid");
       setIsLive(text.trim().toLowerCase() === "now");
     },
@@ -226,10 +241,10 @@ export default function Command() {
   }
 
   const anchorReading = `${readings[0].date} at ${readings[0].time}`;
-  const sectionSubtitle =
-    queryState === "invalid"
-      ? "Keep typing: 14:30, tomorrow 9am, +3h, or -30m"
-      : `${anchorCity.label} · ${anchorReading}`;
+  const hasQueryIssue = queryState !== "idle" && queryState !== "valid";
+  const sectionSubtitle = hasQueryIssue
+    ? describeQueryIssue(queryState, query, anchorCity)
+    : `Times entered use ${anchorCity.label} · ${anchorReading}`;
 
   return (
     <List
@@ -237,9 +252,12 @@ export default function Command() {
       navigationTitle="Time Travel"
       searchText={query}
       onSearchTextChange={changeQuery}
-      searchBarPlaceholder={`Set time in ${anchorCity.label} — 14:30, tomorrow 9am, +3h`}
+      searchBarPlaceholder={`Time in ${anchorCity.label}: 14:30, tomorrow 9am, +3h`}
     >
-      <List.Section title={isLive ? "NOW" : "TIME TRAVEL"} subtitle={sectionSubtitle}>
+      <List.Section
+        title={`${isLive ? "NOW" : "TIME TRAVEL"}  ·  ${moveShortcutHint} 1H`}
+        subtitle={sectionSubtitle}
+      >
         {readings.map((reading, index) => {
           const { city } = reading;
           const dayOffset = reading.daySerial - readings[0].daySerial;
@@ -249,25 +267,49 @@ export default function Command() {
             <List.Item
               key={city.timeZone}
               icon={{
-                source: reading.hour >= 7 && reading.hour < 19 ? Icon.Sun : Icon.Moon,
-                tintColor: reading.isWorkingHour ? Color.Green : Color.SecondaryText,
+                value: {
+                  source: reading.hour >= 7 && reading.hour < 19 ? Icon.Sun : Icon.Moon,
+                  tintColor: Color.SecondaryText,
+                },
+                tooltip: reading.hour >= 7 && reading.hour < 19 ? "Local daytime" : "Local nighttime",
               }}
               title={{ value: city.label, tooltip: reading.timeZoneName }}
               keywords={[city.timeZone, reading.timeZoneName]}
               accessories={[
-                ...(index === 0 ? [{ tag: { value: "Anchor", color: Color.Blue } }] : []),
-                ...(dayOffset === 0 ? [] : [{ tag: dayDifference }]),
+                ...(index === 0
+                  ? [
+                      {
+                        tag: { value: "Anchor", color: Color.Blue },
+                        tooltip: `Times entered in search use ${city.label}`,
+                      },
+                    ]
+                  : []),
+                ...(dayOffset === 0
+                  ? []
+                  : [
+                      {
+                        tag: {
+                          value: dayDifference,
+                          color: dayOffset > 0 ? Color.Orange : Color.Purple,
+                        },
+                        tooltip: `${dayDifference} relative to ${anchorCity.label}`,
+                      },
+                    ]),
                 {
                   tag: {
                     value: reading.isWorkingHour ? "Working hours" : "Outside work",
-                    color: reading.isWorkingHour ? Color.Green : Color.SecondaryText,
+                    color: reading.isWorkingHour ? Color.Green : Color.Orange,
                   },
+                  tooltip: reading.isWorkingHour ? "Between 9 AM and 5 PM" : "Outside 9 AM–5 PM",
                 },
                 {
                   text: { value: reading.time, color: Color.PrimaryText },
                   tooltip: dayOffset === 0 ? reading.date : `${reading.date} · ${dayDifference}`,
                 },
-                { text: `00  ${reading.timeline}  24` },
+                {
+                  text: `00  ${reading.timeline}  24`,
+                  tooltip: `${reading.time} on a 24-hour timeline`,
+                },
               ]}
               actions={
                 <TimeTravelActions

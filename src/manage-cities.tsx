@@ -1,4 +1,15 @@
-import { Action, ActionPanel, Color, Icon, List, Toast, showToast } from "@raycast/api";
+import {
+  Action,
+  ActionPanel,
+  Alert,
+  Color,
+  Icon,
+  List,
+  Toast,
+  confirmAlert,
+  showToast,
+  useNavigation,
+} from "@raycast/api";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   DEFAULT_CITIES,
@@ -15,17 +26,73 @@ interface ManageCitiesProps {
   onChange?: (cities: City[]) => void;
 }
 
+interface AddCityPickerProps {
+  cities: City[];
+  isSaving: boolean;
+  onAdd: (city: City) => Promise<boolean>;
+}
+
+function AddCityPicker({ cities, isSaving, onAdd }: AddCityPickerProps) {
+  const [query, setQuery] = useState("");
+  const { pop } = useNavigation();
+  const selectedTimeZones = useMemo(() => new Set(cities.map((city) => city.timeZone)), [cities]);
+  const availableCities = useMemo(
+    () => getCityCatalog().filter((option) => !selectedTimeZones.has(option.timeZone)),
+    [selectedTimeZones],
+  );
+
+  const add = useCallback(
+    async (city: City) => {
+      if (await onAdd(city)) pop();
+    },
+    [onAdd, pop],
+  );
+
+  return (
+    <List
+      filtering
+      isLoading={isSaving}
+      navigationTitle="Add a City"
+      searchText={query}
+      onSearchTextChange={setQuery}
+      searchBarPlaceholder="City, country, or time zone…"
+    >
+      <List.EmptyView
+        icon={Icon.MagnifyingGlass}
+        title={query.trim() ? "No Matching City" : "Search for a City"}
+        description={
+          query.trim()
+            ? "Try a nearby city or its time-zone name."
+            : "Try Tokyo, Poland, Pacific Time, or Europe/London."
+        }
+      />
+      {query.trim() ? (
+        <List.Section title="Results">
+          {availableCities.map((city) => (
+            <List.Item
+              key={city.timeZone}
+              icon={Icon.PlusCircle}
+              title={city.label}
+              subtitle={formatTimeZoneIdentifier(city.timeZone)}
+              keywords={city.keywords}
+              actions={
+                <ActionPanel>
+                  <Action title={`Add ${city.label}`} icon={Icon.PlusCircle} onAction={() => add(city)} />
+                </ActionPanel>
+              }
+            />
+          ))}
+        </List.Section>
+      ) : null}
+    </List>
+  );
+}
+
 export function ManageCities({ onChange }: ManageCitiesProps) {
   const [cities, setCities] = useState<City[]>(DEFAULT_CITIES);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const isPersisting = useRef(false);
-  const catalog = getCityCatalog();
-  const selectedTimeZones = useMemo(() => new Set(cities.map((city) => city.timeZone)), [cities]);
-  const availableCities = useMemo(
-    () => catalog.filter((option) => !selectedTimeZones.has(option.timeZone)),
-    [catalog, selectedTimeZones],
-  );
 
   useEffect(() => {
     let isActive = true;
@@ -43,8 +110,8 @@ export function ManageCities({ onChange }: ManageCitiesProps) {
   }, []);
 
   const persist = useCallback(
-    async (nextCities: City[], successTitle: string) => {
-      if (isPersisting.current) return;
+    async (nextCities: City[], successTitle: string): Promise<boolean> => {
+      if (isPersisting.current) return false;
 
       isPersisting.current = true;
       setIsSaving(true);
@@ -55,10 +122,12 @@ export function ManageCities({ onChange }: ManageCitiesProps) {
       try {
         await saveCities(nextCities);
         await showToast(Toast.Style.Success, successTitle);
+        return true;
       } catch {
         setCities(previousCities);
         onChange?.(previousCities);
         await showToast(Toast.Style.Failure, "Could not save that change");
+        return false;
       } finally {
         isPersisting.current = false;
         setIsSaving(false);
@@ -74,6 +143,22 @@ export function ManageCities({ onChange }: ManageCitiesProps) {
         await showToast(Toast.Style.Failure, "Keep at least one city");
         return;
       }
+
+      const nextAnchor = nextCities[0];
+      const confirmed = await confirmAlert({
+        icon: Icon.XMarkCircle,
+        title: `Remove ${city.label}?`,
+        message:
+          cities[0].timeZone === city.timeZone
+            ? `${city.label} will be removed. ${nextAnchor.label} will become the city used for entered times.`
+            : `${city.label} will be removed from your world clock.`,
+        primaryAction: {
+          title: "Remove City",
+          style: Alert.ActionStyle.Destructive,
+        },
+      });
+      if (!confirmed) return;
+
       await persist(nextCities, `Removed ${city.label}`);
     },
     [cities, persist],
@@ -83,9 +168,17 @@ export function ManageCities({ onChange }: ManageCitiesProps) {
     return <List isLoading navigationTitle="Manage Cities" searchBarPlaceholder="Loading cities…" />;
   }
 
+  const addCityPicker = (
+    <AddCityPicker
+      cities={cities}
+      isSaving={isSaving}
+      onAdd={(city) => persist(addCity(cities, city), `Added ${city.label}`)}
+    />
+  );
+
   return (
-    <List isLoading={isSaving} navigationTitle="Manage Cities" searchBarPlaceholder="Search cities…">
-      <List.Section title="Your Cities" subtitle="The first city is the time-search anchor">
+    <List isLoading={isSaving} navigationTitle="Manage Cities" searchBarPlaceholder="Filter your cities…">
+      <List.Section title="Your Cities" subtitle={`Times you enter use ${cities[0].label}`}>
         {cities.map((city, index) => (
           <List.Item
             key={city.timeZone}
@@ -95,50 +188,49 @@ export function ManageCities({ onChange }: ManageCitiesProps) {
             accessories={index === 0 ? [{ tag: { value: "Anchor", color: Color.Blue } }] : []}
             actions={
               <ActionPanel>
-                <Action
-                  title="Remove City"
-                  icon={Icon.XMarkCircle}
-                  style={Action.Style.Destructive}
-                  onAction={() => remove(city)}
-                />
                 {index > 0 ? (
                   <Action
-                    title="Make Time-Search Anchor"
+                    title={`Use ${city.label} for Entered Times`}
                     icon={Icon.StarCircle}
                     shortcut={{
                       macOS: { modifiers: ["cmd", "shift"], key: "enter" },
                       Windows: { modifiers: ["ctrl", "shift"], key: "enter" },
                     }}
                     onAction={() =>
-                      persist(makeAnchor(cities, city.timeZone), `${city.label} is now the anchor`)
+                      persist(makeAnchor(cities, city.timeZone), `${city.label} now sets entered times`)
                     }
                   />
-                ) : null}
+                ) : (
+                  <Action.Push title="Add a City" icon={Icon.PlusCircle} target={addCityPicker} />
+                )}
+                <ActionPanel.Section>
+                  {index > 0 ? (
+                    <Action.Push title="Add a City" icon={Icon.PlusCircle} target={addCityPicker} />
+                  ) : null}
+                  <Action
+                    title={`Remove ${city.label}`}
+                    icon={Icon.XMarkCircle}
+                    style={Action.Style.Destructive}
+                    onAction={() => remove(city)}
+                  />
+                </ActionPanel.Section>
               </ActionPanel>
             }
           />
         ))}
       </List.Section>
 
-      <List.Section title="Add a City" subtitle={`${availableCities.length} time zones`}>
-        {availableCities.map((city) => (
-          <List.Item
-            key={city.timeZone}
-            icon={Icon.PlusCircle}
-            title={city.label}
-            subtitle={formatTimeZoneIdentifier(city.timeZone)}
-            keywords={city.keywords}
-            actions={
-              <ActionPanel>
-                <Action
-                  title="Add City"
-                  icon={Icon.PlusCircle}
-                  onAction={() => persist(addCity(cities, city), `Added ${city.label}`)}
-                />
-              </ActionPanel>
-            }
-          />
-        ))}
+      <List.Section title="Add">
+        <List.Item
+          icon={Icon.PlusCircle}
+          title="Add a City…"
+          subtitle="Search by city, country, or time zone"
+          actions={
+            <ActionPanel>
+              <Action.Push title="Search Cities" icon={Icon.MagnifyingGlass} target={addCityPicker} />
+            </ActionPanel>
+          }
+        />
       </List.Section>
     </List>
   );
