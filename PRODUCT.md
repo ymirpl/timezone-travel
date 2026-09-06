@@ -10,7 +10,7 @@ People coordinating across cities who need to compare local times quickly withou
 
 ## Product Purpose
 
-Time Travel is a focused world clock for rapid timezone comparison. Success means a user can answer "what time is that for everyone?" in a few keystrokes, with city setup kept out of the primary interaction.
+Timezone Travel is a focused world clock for rapid timezone comparison. Success means a user can answer "what time is that for everyone?" in a few keystrokes, with city setup kept out of the primary interaction.
 
 ## Brand Personality
 

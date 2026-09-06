@@ -211,7 +211,7 @@ export default function Command() {
     return (
       <List
         isLoading
-        navigationTitle="Time Travel"
+        navigationTitle="Timezone Travel"
         searchText=""
         onSearchTextChange={() => undefined}
         searchBarPlaceholder="Loading cities…"
@@ -249,7 +249,7 @@ export default function Command() {
   return (
     <List
       filtering={false}
-      navigationTitle="Time Travel"
+      navigationTitle="Timezone Travel"
       searchText={query}
       onSearchTextChange={changeQuery}
       searchBarPlaceholder={`Time in ${anchorCity.label}: 14:30, tomorrow 9am, +3h`}

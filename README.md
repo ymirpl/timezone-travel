@@ -1,19 +1,43 @@
-# Time Travel World Clock
+# Timezone Travel
 
-A keyboard-first Raycast extension for comparing one moment across multiple cities.
+See one moment everywhere.
 
-## Interaction
+Timezone Travel turns time-zone planning into one keyboard flow. Choose a moment in your anchor city and
+every saved city moves with it, so you can answer “what time is that for everyone?” without doing the
+arithmetic yourself.
 
-- Type `14:30`, `9am`, `tomorrow 09:00`, `+3h`, or `-30m` to jump through time.
-- Press `Option` + `Right/Left Arrow` to move by one hour.
-- Use **Return to Now** to resume the live clock.
-- Open **Manage Cities** to search for a city, add or remove it, and choose the anchor used by typed clock times.
+## One Timeline, Every City
 
-Every interaction changes one shared instant, so all city rows move together.
+- **Travel by keyboard** — press `Option` + `←/→` on macOS or `Alt` + `←/→` on Windows to move every
+  city by one hour.
+- **Type the time you mean** — jump to `9am`, `14:30`, `tomorrow 09:00`, `+3h`, or `-30m`.
+- **Spot good meeting times** — see local working hours, daytime, and date changes at a glance.
+- **Keep the comparison aligned** — every row uses the same 24-hour timeline and shared instant.
+- **Add cities without time-zone syntax** — search by city, country, abbreviation, or time-zone name.
+- **Copy what you need** — copy one city's reading or every local time in one action.
 
-## Store publishing
+## Get Started
 
-Replace the `author` value in `package.json` with your Raycast Store username before publishing.
+1. Open **Manage Cities** and add the places you care about.
+2. Put the city that should interpret typed times first by making it the anchor.
+3. Open **Timezone Travel**, type a time or move in one-hour steps, and watch every city update together.
+
+Use **Return to Now** from the action menu whenever you want to resume the live clock.
+
+## Time Shortcuts
+
+- `14:30` or `9am`
+- `tomorrow 09:00` or `yesterday 6pm`
+- `+3h`, `-30m`, or `+1day`
+- `now`
+
+## Preferences
+
+Choose a 12-hour or 24-hour clock from the extension preferences.
+
+## Author
+
+Created and maintained by [Marcin Mincer](mailto:marcin.mincer@gmail.com).
 
 ## Development
 

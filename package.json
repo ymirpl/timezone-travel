@@ -1,10 +1,10 @@
 {
   "$schema": "https://www.raycast.com/schemas/extension.json",
-  "name": "time-travel-world-clock",
-  "title": "Time Travel World Clock",
-  "description": "Move through time and compare the same moment across cities.",
+  "name": "timezone-travel",
+  "title": "Timezone Travel",
+  "description": "Travel through time and compare the same moment across cities.",
   "icon": "icon.png",
-  "author": "marcinmincer",
+  "author": "mincer_m",
   "platforms": [
     "macOS",
     "Windows"
@@ -12,11 +12,17 @@
   "categories": [
     "Productivity"
   ],
+  "keywords": [
+    "world clock",
+    "time zones",
+    "timezone converter",
+    "meeting planner"
+  ],
   "license": "MIT",
   "commands": [
     {
       "name": "time-travel",
-      "title": "Time Travel",
+      "title": "Timezone Travel",
       "subtitle": "Compare Cities",
       "description": "Move one moment across all configured cities",
       "mode": "view"
@@ -24,7 +30,7 @@
     {
       "name": "manage-cities",
       "title": "Manage Cities",
-      "subtitle": "Time Travel",
+      "subtitle": "Timezone Travel",
       "description": "Add, remove, or choose the anchor city",
       "mode": "view"
     }
@@ -50,7 +56,7 @@
     }
   ],
   "dependencies": {
-    "@raycast/api": "^2.1.2",
+    "@raycast/api": "2.1.2",
     "react": "^19.0.0"
   },
   "devDependencies": {
